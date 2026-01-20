@@ -227,18 +227,18 @@
         Q/E - Zoom Camera In/Out
     </div>
     
-    <!-- Load THREE.js and then the working game -->
+    <!-- Load THREE.js and then the game -->
     <script type="module">
         // Load Three.js first
         async function loadThreeJS() {
             try {
                 const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js');
-                
+
                 // Load post-processing addons
                 const { EffectComposer } = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/postprocessing/EffectComposer.js');
                 const { RenderPass } = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/postprocessing/RenderPass.js');
                 const { UnrealBloomPass } = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/postprocessing/UnrealBloomPass.js');
-                
+
                 // Create a wrapper object that includes THREE and the addons
                 const THREEWithAddons = {
                     ...THREE,
@@ -246,27 +246,27 @@
                     RenderPass,
                     UnrealBloomPass
                 };
-                
+
                 // Make the wrapper globally available
                 window.THREE = THREEWithAddons;
-                
+
                 return true;
             } catch (error) {
                 console.error('Failed to load Three.js:', error);
                 return false;
             }
         }
-        
-        // Load the working game after Three.js is ready
+
+        // Load the game after Three.js is ready
         async function loadGame() {
             try {
-                await import('./js/working-game.js');
+                await import('./JS/main.js');
             } catch (error) {
-                console.error('Failed to load working game:', error);
+                console.error('Failed to load game:', error);
                 showGameLoadError(error);
             }
         }
-        
+
         function showGameLoadError(error) {
             const errorDiv = document.createElement('div');
             errorDiv.style.cssText = `
@@ -282,10 +282,10 @@
                 z-index: 10000;
                 max-width: 500px;
             `;
-            
+
             errorDiv.innerHTML = `
-                <h2>❌ Game Loading Error</h2>
-                <p>Failed to load the working game module.</p>
+                <h2>Game Loading Error</h2>
+                <p>Failed to load the game module.</p>
                 <p><strong>Error:</strong> ${error.message}</p>
                 <p>Please check the browser console for more details.</p>
                 <button onclick="location.reload()" style="
@@ -300,7 +300,7 @@
             `;
             document.body.appendChild(errorDiv);
         }
-        
+
         // Load Three.js and then the game
         loadThreeJS().then(success => {
             if (success) {
