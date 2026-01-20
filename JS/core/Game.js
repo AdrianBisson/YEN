@@ -643,6 +643,12 @@ export class Game {
                 const shadow = collision.snake;
                 if (collision.object === shadow.head) continue;
 
+                // Check player head
+                if (collision.object === this.playerSnake.head) {
+                    this._dissolveSnake(shadow);
+                    continue;
+                }
+
                 // Check player segment
                 if (this.playerSnake.segments.includes(collision.object)) {
                     this._dissolveSnake(shadow);
