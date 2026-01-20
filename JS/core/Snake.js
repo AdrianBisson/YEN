@@ -35,6 +35,12 @@ export class Snake {
         /** @type {number} */
         this.speed = isPlayer ? settings.speed : settings.shadowSpeed;
 
+        /** @type {number} */
+        this.collisionUpdateInterval = 50;
+
+        /** @type {number} */
+        this.lastCollisionUpdate = 0;
+
         /** @type {THREE.Mesh[]} */
         this.segments = [];
 
@@ -278,6 +284,13 @@ export class Snake {
      * @param {number} delta - Time delta in seconds
      */
     update(delta) {
+        const now = performance.now();
+        const shouldUpdateCollision = this.isPlayer ||
+            now - this.lastCollisionUpdate >= this.collisionUpdateInterval;
+        if (shouldUpdateCollision && !this.isPlayer) {
+            this.lastCollisionUpdate = now;
+        }
+
         // Update direction from head rotation
         this.head.getWorldDirection(this.direction);
 
@@ -294,7 +307,7 @@ export class Snake {
         }
 
         // Slithering animation
-        const time = performance.now() * 0.001;
+        const time = now * 0.001;
         const wiggle = Math.sin(time * 5 + this.colorOffset) * 0.5;
         this.head.position.y += wiggle * 0.1;
 
@@ -328,8 +341,8 @@ export class Snake {
             const segWiggle = Math.sin(time * 5 + i * 0.5 + this.colorOffset) * 0.3;
             this.segments[i].position.x += segWiggle * 0.05;
 
-            // Update collision for player segments only
-            if (this.isPlayer) {
+            // Update collision for segments on a reduced cadence for shadow snakes
+            if (shouldUpdateCollision) {
                 this.collisionSystem.updateObject(this.segments[i], this.segments[i].position);
             }
         }
@@ -351,8 +364,8 @@ export class Snake {
             this.bodyMaterial.emissive = headColor;
         }
 
-        // Update collision for player head
-        if (this.isPlayer) {
+        // Update collision for head (reduced cadence for shadow snakes)
+        if (shouldUpdateCollision) {
             this.collisionSystem.updateObject(this.head, this.head.position);
         }
     }
