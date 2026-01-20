@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>YEN: the Eternal Longing</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+        }
+        #splash-title {
+            font-family: 'UnifrakturMaguntia', cursive;
+            font-size: 48px;
+            text-align: center;
+            line-height: 1.2;
+            margin-bottom: 40px;
+        }
+        #start-button {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            display: block;
+        }
+        #start-button:hover {
+            background: #666;
+        }
+        #volume-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #volume-button:hover {
+            background: #888;
+        }
+        #volume-button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        #mobile-pause {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        #game-over { 
+            display: none; 
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #game-over h1 {
+            margin: 0 0 10px;
+        }
+        #pause-menu {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+        .control-row {
+            margin: 5px 0;
+        }
+        .control-row label {
+            margin-right: 10px;
+        }
+        #camera-instructions {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 10px 12px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+
+    <!-- Import map so example modules can resolve 'three' and sub-imports -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js",
+            "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="splash-screen">
+        <div id="splash-title">YEN: The Eternal Longing</div>
+        <button id="start-button">Start Game</button>
+        <button id="mobile-pause">⏸</button>
+    </div>
+
+    <div id="score-display">Score: <span id="score">0</span></div>
+
+    <div id="game-canvas-container"></div>
+
+    <div id="game-over">
+        <h1>Game Over</h1>
+        <div>Your Score: <span id="final-score">0</span></div>
+        <button id="reincarnate-button">Reincarnate</button>
+    </div>
+
+    <div id="pause-menu">
+        <div class="control-row">
+            <label>Speed: <span id="speed-value">0.3</span></label>
+            <input type="range" id="speed" min="0.1" max="2" step="0.1" value="0.3">
+        </div>
+        <div class="control-row">
+            <label>Color Cycle: <span id="color-cycle-value">0.5</span></label>
+            <input type="range" id="color-cycle" min="0.1" max="2" step="0.1" value="0.5">
+        </div>
+        <div class="control-row">
+            <label>FOV: <span id="fov-value">75</span></label>
+            <input type="range" id="fov" min="45" max="100" step="1" value="75">
+        </div>
+        <div class="control-row">
+            <label>Shadow Speed: <span id="shadow-speed-value">0.40</span></label>
+            <input type="range" id="shadow-speed" min="0.1" max="1.0" step="0.01" value="0.40">
+        </div>
+        <div class="control-row">
+            <label>Spawn Rate: <span id="spawn-rate-value">3.0</span></label>
+            <input type="range" id="spawn-rate" min="0.5" max="5" step="0.5" value="3">
+        </div>
+        <div class="control-row">
+            <label>FX Volume: <span id="fx-volume-value">0.5</span></label>
+            <input type="range" id="fx-volume" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        <div class="control-row">
+            <label>Wall Opacity: <span id="wall-opacity-value">1.0</span></label>
+            <input type="range" id="wall-opacity" min="0" max="1" step="0.1" value="1.0">
+        </div>
+        <div class="control-row">
+            <label><input type="checkbox" id="stationary-camera"> Stationary Camera</label>
+        </div>
+        <div class="control-row">
+            <label><input type="checkbox" id="wireframe"> Wireframe Walls</label>
+        </div>
+        <div class="button-group">
+            <button id="resume">Resume Game</button>
+            <button id="pause-restart">Restart Game</button>
+        </div>
+    </div>
+    
+    <div id="camera-instructions">
+        Camera Controls (mouse still controls snake):<br>
+        W/S - Orbit Camera Up/Down<br>
+        A/D - Orbit Camera Left/Right<br>
+        Q/E - Zoom Camera In/Out
+    </div>
+    
+    <!-- Load THREE.js and then the game -->
+    <script type="module">
+        // Load Three.js first
+        async function loadThreeJS() {
+            try {
+                const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js');
+
+                // Load post-processing addons
+                const { EffectComposer } = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/postprocessing/EffectComposer.js');
+                const { RenderPass } = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/postprocessing/RenderPass.js');
+                const { UnrealBloomPass } = await import('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/postprocessing/UnrealBloomPass.js');
+
+                // Create a wrapper object that includes THREE and the addons
+                const THREEWithAddons = {
+                    ...THREE,
+                    EffectComposer,
+                    RenderPass,
+                    UnrealBloomPass
+                };
+
+                // Make the wrapper globally available
+                window.THREE = THREEWithAddons;
+
+                return true;
+            } catch (error) {
+                console.error('Failed to load Three.js:', error);
+                return false;
+            }
+        }
+
+        // Load the game after Three.js is ready
+        async function loadGame() {
+            try {
+                await import('./JS/main.js');
+            } catch (error) {
+                console.error('Failed to load game:', error);
+                showGameLoadError(error);
+            }
+        }
+
+        function showGameLoadError(error) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(255, 0, 0, 0.9);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                text-align: center;
+                z-index: 10000;
+                max-width: 500px;
+            `;
+
+            errorDiv.innerHTML = `
+                <h2>Game Loading Error</h2>
+                <p>Failed to load the game module.</p>
+                <p><strong>Error:</strong> ${error.message}</p>
+                <p>Please check the browser console for more details.</p>
+                <button onclick="location.reload()" style="
+                    background: #444;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    margin-top: 15px;
+                ">Retry</button>
+            `;
+            document.body.appendChild(errorDiv);
+        }
+
+        // Load Three.js and then the game
+        loadThreeJS().then(success => {
+            if (success) {
+                loadGame();
+            } else {
+                showGameLoadError(new Error('Three.js failed to load'));
+            }
+        });
+    </script>
+</body>
+</html>
