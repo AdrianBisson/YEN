@@ -13,6 +13,7 @@
  * @property {number} spawnRate - How frequently new nibbles spawn
  * @property {number} fxVolume - Master volume for all sound effects
  * @property {number} wallOpacity - Transparency of the cube walls
+ * @property {number} trailOpacity - Transparency of the particle trail
  * @property {boolean} wireframeEnabled - Toggle wireframe wall display
  * @property {boolean} stationaryCamera - Toggle stationary camera mode
  */
@@ -36,6 +37,7 @@ class Settings {
             spawnRate: 3,
             fxVolume: 0.5,
             wallOpacity: 1.0,
+            trailOpacity: 0.45,
             wireframeEnabled: false,
             stationaryCamera: false
         };
@@ -137,6 +139,10 @@ class Settings {
     /** @type {number} */
     get wallOpacity() { return this._values.wallOpacity; }
     set wallOpacity(value) { this.set('wallOpacity', value); }
+
+    /** @type {number} */
+    get trailOpacity() { return this._values.trailOpacity; }
+    set trailOpacity(value) { this.set('trailOpacity', value); }
 
     /** @type {boolean} */
     get wireframeEnabled() { return this._values.wireframeEnabled; }

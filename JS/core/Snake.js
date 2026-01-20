@@ -164,6 +164,8 @@ export class Snake {
             vertexColors: true,
             sizeAttenuation: true,
             transparent: true,
+            opacity: settings.trailOpacity,
+            depthWrite: false,
             blending: THREE.AdditiveBlending
         });
 
