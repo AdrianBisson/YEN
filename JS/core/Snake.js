@@ -3,7 +3,7 @@
  * @module core/Snake
  */
 
-import { SEGMENT_RADIUS, SEGMENT_SPACING } from '../config/constants.js';
+import { CUBE_HALF_SIZE, SEGMENT_RADIUS, SEGMENT_SPACING, WALL_BUFFER } from '../config/constants.js';
 import { settings } from '../config/settings.js';
 import { Vector3Pool, ColorPool } from '../utils/ObjectPools.js';
 import { VectorMath } from '../utils/VectorMath.js';
@@ -231,8 +231,11 @@ export class Snake {
         this.head.position.add(this.direction.clone().multiplyScalar(moveDistance));
 
         // AI behavior for shadow snakes
-        if (!this.isPlayer && !this.isInitialReflectionPhase) {
-            this._seekNibbles();
+        if (!this.isPlayer) {
+            if (!this.isInitialReflectionPhase) {
+                this._seekNibbles();
+            }
+            this._avoidWalls();
         }
 
         // Slithering animation
@@ -376,6 +379,64 @@ export class Snake {
             const gentleWander = Math.sin(time * 0.5 + this.colorOffset) * 0.02;
             this.head.rotation.y += gentleWander;
         }
+    }
+
+    /**
+     * Keep shadow snakes within the cube by steering away from walls.
+     * @private
+     */
+    _avoidWalls() {
+        const safeBoundary = CUBE_HALF_SIZE - WALL_BUFFER;
+        const pos = this.head.position;
+        const steer = Vector3Pool.get().set(0, 0, 0);
+        let needsTurn = false;
+
+        if (pos.x > safeBoundary) {
+            steer.x -= 1;
+            needsTurn = true;
+        } else if (pos.x < -safeBoundary) {
+            steer.x += 1;
+            needsTurn = true;
+        }
+
+        if (pos.y > safeBoundary) {
+            steer.y -= 1;
+            needsTurn = true;
+        } else if (pos.y < -safeBoundary) {
+            steer.y += 1;
+            needsTurn = true;
+        }
+
+        if (pos.z > safeBoundary) {
+            steer.z -= 1;
+            needsTurn = true;
+        } else if (pos.z < -safeBoundary) {
+            steer.z += 1;
+            needsTurn = true;
+        }
+
+        if (!needsTurn) {
+            Vector3Pool.release(steer);
+            return;
+        }
+
+        pos.x = Math.min(Math.max(pos.x, -CUBE_HALF_SIZE + SEGMENT_RADIUS), CUBE_HALF_SIZE - SEGMENT_RADIUS);
+        pos.y = Math.min(Math.max(pos.y, -CUBE_HALF_SIZE + SEGMENT_RADIUS), CUBE_HALF_SIZE - SEGMENT_RADIUS);
+        pos.z = Math.min(Math.max(pos.z, -CUBE_HALF_SIZE + SEGMENT_RADIUS), CUBE_HALF_SIZE - SEGMENT_RADIUS);
+
+        steer.normalize();
+
+        const targetRotation = Math.atan2(steer.x, steer.z);
+        const rotationSpeed = 0.12;
+        this.head.rotation.y += (targetRotation - this.head.rotation.y) * rotationSpeed;
+
+        const targetYRotation = Math.atan2(
+            -steer.y,
+            Math.sqrt(steer.x ** 2 + steer.z ** 2)
+        );
+        this.head.rotation.x += (targetYRotation - this.head.rotation.x) * rotationSpeed * 0.5;
+
+        Vector3Pool.release(steer);
     }
 
     /**
