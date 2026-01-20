@@ -44,11 +44,26 @@ export class Snake {
         /** @type {THREE.CatmullRomCurve3} */
         this.path = new THREE.CatmullRomCurve3();
 
-        /** @type {THREE.Mesh|null} */
-        this.bodyMesh = null;
-
         /** @type {THREE.Group} */
         this.head = new THREE.Group();
+
+        /** @type {THREE.Mesh|null} */
+        this.headMesh = null;
+
+        /** @type {THREE.Mesh[]} */
+        this.visualSegments = [];
+
+        /** @type {THREE.Material|null} */
+        this.headMaterial = null;
+
+        /** @type {THREE.Material|null} */
+        this.bodyMaterial = null;
+
+        /** @type {THREE.Material|null} */
+        this.collisionMaterial = null;
+
+        /** @type {THREE.SphereGeometry|null} */
+        this.visualSegmentGeometry = null;
 
         /** @type {THREE.Points} */
         this.particleTrail = null;
@@ -99,20 +114,36 @@ export class Snake {
      * @private
      */
     _init() {
-        const material = new THREE.MeshPhysicalMaterial({
+        this.headMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            roughness: 0.3,
+            metalness: 0.4,
+            transmission: 0.6,
+            thickness: 0.6,
+            emissive: 0xffffff,
+            emissiveIntensity: 0.35
+        });
+        this.bodyMaterial = new THREE.MeshPhysicalMaterial({
             color: 0xffffff,
             roughness: 0.5,
             metalness: 0.2,
-            transmission: 0.5,
-            thickness: 0.5,
+            transmission: 0.4,
+            thickness: 0.4,
             emissive: 0xffffff,
             emissiveIntensity: 0.2
         });
+        this.collisionMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0
+        });
+        this.visualSegmentGeometry = new THREE.SphereGeometry(SEGMENT_RADIUS, 16, 16);
 
         // Create head
-        const headGeometry = new THREE.SphereGeometry(SEGMENT_RADIUS * 1.2, 32, 32);
-        const headMesh = new THREE.Mesh(headGeometry, material);
-        this.head.add(headMesh);
+        const headGeometry = new THREE.SphereGeometry(SEGMENT_RADIUS * 1.1, 32, 32);
+        this.headMesh = new THREE.Mesh(headGeometry, this.headMaterial);
+        this.headMesh.scale.set(1, 1, 1.5);
+        this.head.add(this.headMesh);
 
         // Add eyes
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
@@ -142,8 +173,9 @@ export class Snake {
             this.trail.push(trailPos);
         }
 
-        // Create body mesh
-        this._updateBodyMesh(material);
+        // Position initial visual body segments
+        this.path = new THREE.CatmullRomCurve3(this.trail);
+        this._updateVisualSegments();
     }
 
     /**
@@ -175,17 +207,41 @@ export class Snake {
     }
 
     /**
-     * Update body mesh with current trail
+     * Update visual segment positions and tail taper based on the trail.
      * @private
-     * @param {THREE.Material} material - Material for the body
      */
-    _updateBodyMesh(material) {
-        if (this.bodyMesh) this.scene.remove(this.bodyMesh);
+    _updateVisualSegments() {
+        if (this.visualSegments.length === 0 || this.trail.length === 0) {
+            return;
+        }
 
-        this.path = new THREE.CatmullRomCurve3(this.trail);
-        const geometry = new THREE.TubeGeometry(this.path, this.trail.length, SEGMENT_RADIUS, 16, false);
-        this.bodyMesh = new THREE.Mesh(geometry, material);
-        this.scene.add(this.bodyMesh);
+        const pathLength = this.path.getLength();
+        const direction = Vector3Pool.get();
+        this.head.getWorldDirection(direction);
+        const tailSegments = Math.min(6, this.visualSegments.length);
+        const tailStartIndex = Math.max(0, this.visualSegments.length - tailSegments);
+
+        for (let i = 0; i < this.visualSegments.length; i++) {
+            const mesh = this.visualSegments[i];
+            if (pathLength > 0) {
+                const t = (i + 1) * SEGMENT_SPACING / pathLength;
+                const position = this.path.getPointAt(Math.min(t, 1));
+                mesh.position.copy(position);
+            } else {
+                const segmentPos = Vector3Pool.get();
+                VectorMath.moveForward(this.head.position, direction, -(i + 1) * SEGMENT_SPACING, segmentPos);
+                mesh.position.copy(segmentPos);
+                Vector3Pool.release(segmentPos);
+            }
+
+            const tailT = i >= tailStartIndex ?
+                (i - tailStartIndex) / Math.max(1, this.visualSegments.length - tailStartIndex - 1) :
+                0;
+            const radiusScale = i >= tailStartIndex ? THREE.MathUtils.lerp(1, 0.1, tailT) : 1;
+            mesh.scale.set(radiusScale, radiusScale, radiusScale);
+        }
+
+        Vector3Pool.release(direction);
     }
 
     /**
@@ -200,14 +256,11 @@ export class Snake {
             this.direction.clone().multiplyScalar(SEGMENT_SPACING)
         );
 
-        const material = this.bodyMesh ?
-            this.bodyMesh.material :
-            new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-
         const segment = new THREE.Mesh(
             new THREE.CylinderGeometry(SEGMENT_RADIUS, SEGMENT_RADIUS, SEGMENT_SPACING, 16),
-            material
+            this.collisionMaterial
         );
+        segment.visible = false;
         segment.position.copy(newPosition);
         this.scene.add(segment);
         this.segments.push(segment);
@@ -215,9 +268,9 @@ export class Snake {
 
         if (!initial) this.length++;
 
-        if (this.bodyMesh) {
-            this._updateBodyMesh(this.bodyMesh.material);
-        }
+        const visualSegment = new THREE.Mesh(this.visualSegmentGeometry, this.bodyMaterial);
+        this.scene.add(visualSegment);
+        this.visualSegments.push(visualSegment);
     }
 
     /**
@@ -249,10 +302,10 @@ export class Snake {
         this.trail.unshift(this.head.position.clone());
         if (this.trail.length > settings.trailLength) this.trail.pop();
 
-        // Update body mesh
-        if (this.bodyMesh) {
-            this._updateBodyMesh(this.bodyMesh.material);
-        }
+        // Update path for body visuals/collision
+        this.path = new THREE.CatmullRomCurve3(this.trail);
+
+        this._updateVisualSegments();
 
         // Update segment positions
         for (let i = 0; i < this.segments.length; i++) {
@@ -288,11 +341,14 @@ export class Snake {
         const headColor = new THREE.Color().setHSL(
             (time * settings.colorCycleRate + this.colorOffset) % 1, 1, 0.5
         );
-        this.head.children[0].material.color = headColor;
-        this.head.children[0].material.emissive = headColor;
+        if (this.headMesh) {
+            this.headMesh.material.color = headColor;
+            this.headMesh.material.emissive = headColor;
+        }
 
-        if (this.bodyMesh) {
-            this.bodyMesh.material.color = headColor;
+        if (this.bodyMaterial) {
+            this.bodyMaterial.color = headColor;
+            this.bodyMaterial.emissive = headColor;
         }
 
         // Update collision for player head
@@ -466,9 +522,8 @@ export class Snake {
             this.trail.push(trailPos);
         }
 
-        if (this.bodyMesh?.material) {
-            this._updateBodyMesh(this.bodyMesh.material);
-        }
+        this.path = new THREE.CatmullRomCurve3(this.trail);
+        this._updateVisualSegments();
     }
 
     /**
@@ -476,8 +531,11 @@ export class Snake {
      */
     dispose() {
         this.scene.remove(this.head);
-        this.scene.remove(this.bodyMesh);
         this.scene.remove(this.particleTrail);
+        this.visualSegments.forEach(segment => {
+            this.scene.remove(segment);
+        });
+        this.visualSegments = [];
 
         this.segments.forEach(segment => {
             this.scene.remove(segment);
