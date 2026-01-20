@@ -172,12 +172,7 @@ export class Snake {
         }
 
         // Initialize trail
-        for (let i = 0; i < settings.trailLength; i++) {
-            const trailPos = this.head.position.clone().add(
-                this.direction.clone().multiplyScalar(-i * SEGMENT_SPACING)
-            );
-            this.trail.push(trailPos);
-        }
+        this._rebuildTrail();
 
         // Position initial visual body segments
         this.path = new THREE.CatmullRomCurve3(this.trail);
@@ -190,10 +185,11 @@ export class Snake {
      * @returns {THREE.Points}
      */
     _createParticleTrail() {
+        const trailLength = this._getTrailLength();
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(settings.trailLength * 3);
-        const colors = new Float32Array(settings.trailLength * 3);
-        const sizes = new Float32Array(settings.trailLength);
+        const positions = new Float32Array(trailLength * 3);
+        const colors = new Float32Array(trailLength * 3);
+        const sizes = new Float32Array(trailLength);
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
@@ -231,7 +227,7 @@ export class Snake {
             const mesh = this.visualSegments[i];
             if (pathLength > 0) {
                 const t = (i + 1) * SEGMENT_SPACING / pathLength;
-                const position = this.path.getPointAt(Math.min(t, 1));
+                const position = this.path.getPointAt(t);
                 mesh.position.copy(position);
             } else {
                 const segmentPos = Vector3Pool.get();
@@ -277,6 +273,11 @@ export class Snake {
         const visualSegment = new THREE.Mesh(this.visualSegmentGeometry, this.bodyMaterial);
         this.scene.add(visualSegment);
         this.visualSegments.push(visualSegment);
+
+        if (!initial) {
+            this._extendTrailToLength(this._getTrailLength());
+            this._resizeParticleTrail(this._getTrailLength());
+        }
     }
 
     /**
@@ -312,8 +313,11 @@ export class Snake {
         this.head.position.y += wiggle * 0.1;
 
         // Update trail
+        const trailLength = this._getTrailLength();
         this.trail.unshift(this.head.position.clone());
-        if (this.trail.length > settings.trailLength) this.trail.pop();
+        while (this.trail.length > trailLength) {
+            this.trail.pop();
+        }
 
         // Update path for body visuals/collision
         this.path = new THREE.CatmullRomCurve3(this.trail);
@@ -325,7 +329,7 @@ export class Snake {
             const pathLength = this.path.getLength();
             if (pathLength > 0) {
                 const t = (i + 1) * SEGMENT_SPACING / pathLength;
-                const position = this.path.getPointAt(Math.min(t, 1));
+                const position = this.path.getPointAt(t);
                 this.segments[i].position.copy(position);
             } else {
                 const direction = Vector3Pool.get();
@@ -376,6 +380,7 @@ export class Snake {
      * @param {number} time - Current time in seconds
      */
     _updateParticleTrail(time) {
+        this._resizeParticleTrail(this._getTrailLength());
         const positions = this.particleTrail.geometry.attributes.position.array;
         const colors = this.particleTrail.geometry.attributes.color.array;
         const sizes = this.particleTrail.geometry.attributes.size.array;
@@ -399,6 +404,7 @@ export class Snake {
         this.particleTrail.geometry.attributes.position.needsUpdate = true;
         this.particleTrail.geometry.attributes.color.needsUpdate = true;
         this.particleTrail.geometry.attributes.size.needsUpdate = true;
+        this.particleTrail.geometry.setDrawRange(0, this.trail.length);
     }
 
     /**
@@ -527,16 +533,77 @@ export class Snake {
     syncDirection() {
         this.head.getWorldDirection(this.direction);
 
+        this._rebuildTrail();
+
+        this.path = new THREE.CatmullRomCurve3(this.trail);
+        this._updateVisualSegments();
+    }
+
+    /**
+     * Determine the desired trail length based on current snake size.
+     * @private
+     * @returns {number}
+     */
+    _getTrailLength() {
+        return Math.max(settings.trailLength, Math.ceil(this.length * SEGMENT_SPACING));
+    }
+
+    /**
+     * Resize particle trail buffers to match target length.
+     * @private
+     * @param {number} targetLength - Desired trail length.
+     */
+    _resizeParticleTrail(targetLength) {
+        if (!this.particleTrail) return;
+        const geometry = this.particleTrail.geometry;
+        const currentLength = geometry.attributes.position.count;
+        if (currentLength === targetLength) return;
+
+        const positions = new Float32Array(targetLength * 3);
+        const colors = new Float32Array(targetLength * 3);
+        const sizes = new Float32Array(targetLength);
+
+        const copyCount = Math.min(currentLength, targetLength);
+        positions.set(geometry.attributes.position.array.slice(0, copyCount * 3));
+        colors.set(geometry.attributes.color.array.slice(0, copyCount * 3));
+        sizes.set(geometry.attributes.size.array.slice(0, copyCount));
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    }
+
+    /**
+     * Extend the trail array to match the target length.
+     * @private
+     * @param {number} targetLength - Desired trail length.
+     */
+    _extendTrailToLength(targetLength) {
+        if (this.trail.length === 0) {
+            this.trail.push(this.head.position.clone());
+        }
+
+        while (this.trail.length < targetLength) {
+            const last = this.trail[this.trail.length - 1];
+            const prev = this.trail[this.trail.length - 2];
+            const step = prev ? last.clone().sub(prev) : this.direction.clone().multiplyScalar(-SEGMENT_SPACING);
+            this.trail.push(last.clone().add(step));
+        }
+    }
+
+    /**
+     * Rebuild trail history from the head position.
+     * @private
+     */
+    _rebuildTrail() {
+        const trailLength = this._getTrailLength();
         this.trail = [];
-        for (let i = 0; i < settings.trailLength; i++) {
+        for (let i = 0; i < trailLength; i++) {
             const trailPos = this.head.position.clone().add(
                 this.direction.clone().multiplyScalar(-i * SEGMENT_SPACING)
             );
             this.trail.push(trailPos);
         }
-
-        this.path = new THREE.CatmullRomCurve3(this.trail);
-        this._updateVisualSegments();
     }
 
     /**
