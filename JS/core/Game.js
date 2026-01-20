@@ -615,6 +615,14 @@ export class Game {
             if (collision.type === 'player_collision') {
                 if (collision.object === this.playerSnake.head) continue;
 
+                // Check shadow snake head
+                for (const shadow of this.shadowSnakes) {
+                    if (shadow.head === collision.object) {
+                        this._dissolveSnake(this.playerSnake);
+                        return;
+                    }
+                }
+
                 // Check shadow snake segment
                 for (const shadow of this.shadowSnakes) {
                     if (shadow.segments.includes(collision.object)) {
@@ -635,6 +643,12 @@ export class Game {
                 const shadow = collision.snake;
                 if (collision.object === shadow.head) continue;
 
+                // Check player head
+                if (collision.object === this.playerSnake.head) {
+                    this._dissolveSnake(shadow);
+                    continue;
+                }
+
                 // Check player segment
                 if (this.playerSnake.segments.includes(collision.object)) {
                     this._dissolveSnake(shadow);
@@ -644,7 +658,8 @@ export class Game {
                 // Check other shadow snakes
                 for (const otherShadow of this.shadowSnakes) {
                     if (otherShadow !== shadow) {
-                        if (otherShadow.segments.includes(collision.object)) {
+                        if (otherShadow.head === collision.object ||
+                            otherShadow.segments.includes(collision.object)) {
                             this._dissolveSnake(shadow);
                             break;
                         }
